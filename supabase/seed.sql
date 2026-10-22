@@ -1,0 +1,13 @@
+-- OPTIONAL: a few demo churches so the app isn't empty while testing. Delete them later from /admin.
+-- Names/locations only — no phones and no service times (add real ones from the admin panel).
+insert into public.churches (name, address, neighborhood, governorate, denomination, latitude, longitude, image_url, description, services, facilities, rating, verified, is_published, is_open) values
+('كنيسة مار جرجس','شارع مار جرجس، مصر القديمة','مصر القديمة','القاهرة','الأرثوذكسية القبطية',30.0059,31.2301,'https://images.unsplash.com/photo-1603565816030-6b389eeb23cb?auto=format&fit=crop&w=900&q=80','كنيسة بمنطقة مصر القديمة.',array['قداسات','اجتماعات'],array['مواقف سيارات','دورات مياه'],4.7,false,true,true),
+('كنيسة القديس مار مرقس','العباسية، القاهرة','العباسية','القاهرة','الأرثوذكسية القبطية',30.0716,31.2830,'https://images.unsplash.com/photo-1548625361-58a9b86aa83b?auto=format&fit=crop&w=900&q=80','',array['قداسات'],array['مواقف سيارات'],4.5,false,true,true),
+('كنيسة العذراء مريم','الزيتون، القاهرة','الزيتون','القاهرة','الأرثوذكسية القبطية',30.1066,31.3057,'https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?auto=format&fit=crop&w=900&q=80','',array['قداسات'],array['دورات مياه'],4.2,false,true,false),
+('كنيسة الأنبا رويس','العباسية، القاهرة','العباسية','القاهرة','الأرثوذكسية القبطية',30.0729,31.2845,'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=900&q=80','',array['قداسات'],array['مواقف سيارات'],4.6,false,true,true),
+('كنيسة السيدة العذراء بدمياط','وسط المدينة، دمياط','وسط المدينة','دمياط','الأرثوذكسية القبطية',31.4167,31.8133,'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=900&q=80','',array['قداسات','خدمة شباب'],array['مدخل للكراسي المتحركة'],4.4,false,true,true);
+insert into public.restaurants (name, category, address, governorate, latitude, longitude, image_url, price_range, rating, verified, is_published) values
+('مطعم الفرح','شرقي','مصر القديمة، القاهرة','القاهرة',30.0092,31.2292,'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=700&q=80','متوسط',4.3,false,true),
+('كشري التحرير','مصري','وسط البلد، القاهرة','القاهرة',30.0444,31.2357,'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=700&q=80','اقتصادي',4.8,false,true),
+('بيتزا مارينا','بيتزا','المعادي، القاهرة','القاهرة',29.9637,31.2567,'https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=700&q=80','متوسط',4.1,false,true),
+('كافيه مار جرجس','كافيه','مصر القديمة، القاهرة','القاهرة',30.0038,31.2328,'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=700&q=80','اقتصادي',4.0,false,true);
