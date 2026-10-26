@@ -4,7 +4,7 @@ import AppLayout from './components/AppLayout';
 import AdminPage from './pages/AdminPage';
 import {
   AuthPage, ChurchDetailsPage, ChurchesPage, EventsPage, ExplorePage, FavoritesPage, FiltersPage, HelpPage,
-  LocationPage, MapSearchPage, MorePage, ProfilePage, RestaurantsPage, RoutePage, WelcomePage,
+  LocationPage, MapSearchPage, MorePage, ProfilePage, RestaurantsPage, RoutePage, SuggestChurchPage, WelcomePage,
 } from './pages/Pages';
 
 export default function App() {
@@ -23,6 +23,7 @@ export default function App() {
       <Route path="/restaurants" element={<RestaurantsPage />} />
       <Route path="/favorites" element={<FavoritesPage />} />
       <Route path="/events" element={<EventsPage />} />
+      <Route path="/suggest" element={<SuggestChurchPage />} />
       <Route path="/help" element={<HelpPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/more" element={<MorePage />} />

@@ -7,7 +7,7 @@ import {
 import { denominations, governorates } from '../data/sampleData';
 import { useApp } from '../context/AppContext';
 import type { AppLocation, Coordinates } from '../types';
-import { loadNearbyChurchIds } from '../lib/backend';
+import { adminInsert, adminList, loadNearbyChurchIds, uploadImage } from '../lib/backend';
 import { distanceKm, formatDistance } from '../utils/geo';
 import MapView from '../components/MapView';
 import { ChurchCard, Empty, OpenPill, PageTitle, Rating, RestaurantCard, imgFallback } from '../components/PlaceCard';
@@ -119,6 +119,7 @@ export function ExplorePage() {
     {events.length > 0 && <section><div className="sec-head"><h2>اجتماعات وفعاليات</h2><Link to="/events">الكل</Link></div><div className="h-scroll">{events.slice(0, 6).map((e) => <div className="ev-chip" key={e.id}><Calendar size={15} /><b>{e.title}</b><small>{churches.find((c) => c.id === e.churchId)?.name || ''}</small><small>{[e.startsOn && new Date(e.startsOn).toLocaleDateString('ar-EG'), e.startsAt?.slice(0, 5)].filter(Boolean).join(' · ')}</small></div>)}</div></section>}
     <section><div className="sec-head"><h2>الكنائس القريبة منك</h2><Link to="/churches">عرض الكل</Link></div>
       {list.slice(0, 4).map((c) => <ChurchCard key={c.id} church={c} />)}{list.length === 0 && <Empty title="لا توجد نتائج" body="غيّر البحث أو الفلتر." />}</section>
+    <Link to={`/suggest${q.trim() ? `?name=${encodeURIComponent(q.trim())}` : ''}`} className="suggest-cta"><ChurchIcon size={20} /><div><b>كنيستك مش موجودة؟</b><small>ضيفها وساعد غيرك يلاقوها</small></div><ChevronLeft size={17} /></Link>
   </>;
 }
 
@@ -134,6 +135,7 @@ export function ChurchesPage() {
     <label className="search"><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث بالاسم أو المنطقة..." /></label>
     <div className="chips">{[['all', 'الكل'], ['open', 'متاحة الآن'], ['closed', 'مغلقة']].map(([k, l]) => <button key={k} className={`chip ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>)}{(gov !== 'الكل' || den !== 'الكل' || maxD > 0) && <Link to="/churches" className="chip">مسح الفلاتر ✕</Link>}</div>
     {res.map((c) => <ChurchCard key={c.id} church={c} />)}{res.length === 0 && <Empty title="لا توجد كنائس مطابقة" />}
+    <Link to={`/suggest${q.trim() ? `?name=${encodeURIComponent(q.trim())}` : ''}`} className="suggest-cta"><ChurchIcon size={20} /><div><b>كنيستك مش موجودة؟</b><small>ضيفها وساعد غيرك يلاقوها</small></div><ChevronLeft size={17} /></Link>
   </>;
 }
 export function FiltersPage() {
@@ -269,6 +271,7 @@ export function HelpPage() {
 export function MorePage() {
   const { profile } = useApp();
   const items = [
+    { icon: ChurchIcon, t: 'اقترح كنيسة', d: 'كنيستك مش موجودة؟ ضيفها', to: '/suggest' },
     { icon: Calendar, t: 'الاجتماعات والفعاليات', d: 'اجتماعات الكنائس القادمة', to: '/events' },
     { icon: HandHeart, t: 'المساعدات', d: 'اطلب أو شوف طلبات المساعدة', to: '/help' },
     { icon: Utensils, t: 'مطاعم حول الكنيسة', d: 'مطاعم وكافيهات قريبة', to: '/restaurants' },
@@ -305,5 +308,56 @@ export function ProfilePage() {
     <Link to="/location" className="menu-row"><span className="menu-ic"><MapIcon size={19} /></span><div><b>تغيير موقعي</b></div><ChevronLeft size={17} /></Link>
     {profile?.role === 'admin' && <Link to="/admin" className="menu-row"><span className="menu-ic"><Settings size={19} /></span><div><b>لوحة الإدارة</b><small>تحكم كامل</small></div><ChevronLeft size={17} /></Link>}
     <button className="btn danger" onClick={async () => { await signOut(); nav('/explore'); }}><LogOut size={16} /> تسجيل الخروج</button>
+  </>;
+}
+
+/* ---------- Suggest a missing church ---------- */
+type Sub = { id: string; name: string; status: 'pending' | 'approved' | 'rejected'; admin_note: string | null };
+export function SuggestChurchPage() {
+  const { isAuthenticated, authSession, profile, location } = useApp(); const nav = useNavigate(); const [sp] = useSearchParams();
+  const [f, setF] = useState({ name: sp.get('name') || '', governorate: 'القاهرة', neighborhood: '', address: '', denomination: 'الأرثوذكسية القبطية', phone: '', services: '', schedule_text: '', description: '' });
+  const [pos, setPos] = useState<Coordinates | null>(null); const [photo, setPhoto] = useState<File | null>(null); const [preview, setPreview] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [done, setDone] = useState(false); const [mine, setMine] = useState<Sub[]>([]);
+  useEffect(() => { if (authSession) adminList<Sub>(authSession, 'church_submissions').then(setMine).catch(() => setMine([])); }, [authSession, done]);
+  useEffect(() => { if (!photo) { setPreview(''); return; } const u = URL.createObjectURL(photo); setPreview(u); return () => URL.revokeObjectURL(u); }, [photo]);
+  if (!isAuthenticated || !authSession) return <><div className="head-row"><BackBtn /><h1>اقترح كنيسة</h1><span /></div><Empty title="سجّل الدخول الأول" body="عشان نقدر نراجع الطلب ونكلمك لو احتجنا." action={<Link className="btn navy" to="/auth">تسجيل الدخول / حساب جديد</Link>} /></>;
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  async function here() { setErr(''); try { const l = await getPosition(); setPos({ lat: l.lat, lng: l.lng }); } catch (e) { setErr(e instanceof Error ? e.message : 'تعذر تحديد الموقع'); } }
+  async function submit(e: FormEvent) {
+    e.preventDefault(); setErr('');
+    if (f.name.trim().length < 3) return setErr('اكتب اسم الكنيسة.');
+    if (!pos) return setErr('اضغط «استخدم موقعي الحالي» وانت قريب من الكنيسة، أو الأدمن هيحدد الموقع بعد كده.');
+    setBusy(true);
+    try {
+      let image_url: string | null = null;
+      if (photo) { if (photo.size > 5 * 1024 * 1024) throw new Error('الصورة أكبر من 5 ميجا.'); const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, ''); image_url = await uploadImage(authSession!, `submissions/${authSession!.user.id}/${Date.now()}.${ext}`, photo); }
+      await adminInsert(authSession!, 'church_submissions', { ...f, name: f.name.trim(), latitude: pos.lat, longitude: pos.lng, image_url, user_id: authSession!.user.id, submitter_name: profile?.full_name || null, submitter_phone: profile?.phone || null });
+      setDone(true);
+    } catch (x) { setErr(x instanceof Error ? x.message : 'تعذر الإرسال'); } finally { setBusy(false); }
+  }
+  if (done) return <div className="auth"><span className="loc-ic"><ChurchIcon size={32} /></span><h1>شكرًا ليك 🙏</h1><p className="muted">طلبك وصل للإدارة، وأول ما نراجعه الكنيسة هتظهر للناس.</p><button className="btn navy" onClick={() => { setDone(false); setF({ ...f, name: '', address: '', services: '', schedule_text: '', description: '', phone: '' }); setPhoto(null); setPos(null); }}>اقترح كنيسة تانية</button><button className="link-btn" onClick={() => nav('/explore')}>رجوع للرئيسية</button></div>;
+  return <>
+    <div className="head-row"><BackBtn /><h1>اقترح كنيسة</h1><span /></div>
+    <p className="muted" style={{ marginBottom: 12 }}>كنيستك مش موجودة؟ ضيفها وانت اللي تساعد غيرك يلاقوها. الإدارة بتراجع الطلب وبتنشره.</p>
+    <form className="stack" onSubmit={submit}>
+      <label className="lbl">اسم الكنيسة *<input value={f.name} onChange={set('name')} placeholder="مثال: كنيسة مار جرجس" /></label>
+      <div className="two"><label className="lbl">المحافظة<select value={f.governorate} onChange={set('governorate')}>{governorates.filter((g) => g !== 'الكل').map((g) => <option key={g}>{g}</option>)}</select></label>
+        <label className="lbl">المنطقة / الحي<input value={f.neighborhood} onChange={set('neighborhood')} /></label></div>
+      <label className="lbl">العنوان بالتفصيل<input value={f.address} onChange={set('address')} /></label>
+      <label className="lbl">الطائفة<select value={f.denomination} onChange={set('denomination')}>{denominations.map((d) => <option key={d}>{d}</option>)}</select></label>
+      <label className="lbl">رقم تليفون الكنيسة (لو تعرفه)<input dir="ltr" value={f.phone} onChange={set('phone')} /></label>
+      <label className="lbl">الخدمات<input value={f.services} onChange={set('services')} placeholder="قداسات، مدارس أحد، خدمة شباب..." /></label>
+      <label className="lbl">مواعيد القداسات والاجتماعات<textarea rows={3} value={f.schedule_text} onChange={set('schedule_text')} placeholder="مثال: قداس الأحد 7 ص، اجتماع شباب الجمعة 7 م" /></label>
+      <label className="lbl">معلومات تانية<textarea rows={2} value={f.description} onChange={set('description')} /></label>
+      <div className="card"><h3>الموقع على الخريطة *</h3>
+        {pos ? <p className="good">تم تحديد الموقع ✓ ({pos.lat.toFixed(4)}, {pos.lng.toFixed(4)})</p> : <p className="muted">أحسن حاجة تكون واقف عند الكنيسة وتدوس الزرار.</p>}
+        <button type="button" className="btn outline" onClick={here}><LocateFixed size={16} /> {pos ? 'حدّث موقعي' : 'استخدم موقعي الحالي'}</button>
+        {location && !pos && <button type="button" className="link-btn" onClick={() => setPos({ lat: location.lat, lng: location.lng })}>استخدم موقعي المحفوظ</button>}</div>
+      <div className="card"><h3>صورة الكنيسة</h3>{preview && <img src={preview} alt="" style={{ width: '100%', borderRadius: 14, marginBottom: 8 }} />}
+        <label className="btn outline"><Camera size={16} /> {photo ? 'غيّر الصورة' : 'صوّر أو اختار صورة'}<input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] || null)} /></label></div>
+      {err && <p className="err">{err}</p>}
+      <button className="btn navy" disabled={busy}>{busy ? 'جاري الإرسال...' : 'إرسال للإدارة'}</button>
+    </form>
+    {mine.length > 0 && <div className="card" style={{ marginTop: 16 }}><h3>طلباتي</h3>{mine.map((m) => <div className="kv" key={m.id}><span>{m.name}</span><b>{m.status === 'approved' ? 'تم النشر ✓' : m.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}</b></div>)}</div>}
   </>;
 }

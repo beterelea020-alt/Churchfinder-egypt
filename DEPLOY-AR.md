@@ -5,6 +5,7 @@
 2. افتح **SQL Editor** وشغّل الملفات **بالترتيب**:
    - `supabase/migrations/202610230001_initial_schema.sql`
    - `supabase/migrations/202610230002_admin_full_control.sql`  ← (جديد: رقم التليفون، الصور، الاجتماعات، المساعدات)
+   - `supabase/migrations/202610230003_church_submissions.sql`  ← (جديد: المستخدم يقترح كنيسة والأدمن ينشرها)
    - `supabase/seed.sql`  ← اختياري: كام كنيسة ومطعم تجريبي عشان الموقع مايبقاش فاضي
 3. **Authentication → Providers → Email**: اقفل **Confirm email** عشان العميل يسجل ويدخل على طول.
 4. من **Project Settings → API** خد الـ Project URL والـ publishable key.

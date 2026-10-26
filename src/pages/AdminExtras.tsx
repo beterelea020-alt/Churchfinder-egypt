@@ -4,12 +4,13 @@ import { adminInsert, adminList, adminPatch, adminRemove, type AdminChurchRecord
 
 type Ev = { id: string; church_id: string | null; title: string; kind: string; description: string | null; starts_on: string | null; starts_at: string | null; location_note: string | null; is_published: boolean };
 type Help = { id: string; church_id: string | null; user_id: string | null; title: string; details: string | null; category: string; contact_phone: string | null; status: 'open' | 'in_progress' | 'done'; is_published: boolean; created_at: string };
+type Sub = { id: string; name: string; address: string | null; governorate: string | null; neighborhood: string | null; denomination: string | null; latitude: number | null; longitude: number | null; phone: string | null; services: string | null; schedule_text: string | null; description: string | null; image_url: string | null; submitter_name: string | null; submitter_phone: string | null; status: 'pending' | 'approved' | 'rejected'; admin_note: string | null; created_at: string };
 const statusLabel = { open: 'جديد', in_progress: 'جاري', done: 'تم' } as const;
 const blankEv = { church_id: '', title: '', kind: 'اجتماع', description: '', starts_on: '', starts_at: '', location_note: '', is_published: true };
 const blankHelp = { church_id: '', title: '', details: '', category: 'أخرى', contact_phone: '', status: 'open' as Help['status'], is_published: true };
 
-export default function AdminExtras({ session, churches, view }: { session: AuthSession; churches: AdminChurchRecord[]; view: 'events' | 'help' | 'users' }) {
-  const [evs, setEvs] = useState<Ev[]>([]); const [helps, setHelps] = useState<Help[]>([]); const [users, setUsers] = useState<UserProfile[]>([]);
+export default function AdminExtras({ session, churches, view, onPublished }: { session: AuthSession; churches: AdminChurchRecord[]; view: 'events' | 'help' | 'users' | 'submissions'; onPublished?: () => void }) {
+  const [evs, setEvs] = useState<Ev[]>([]); const [helps, setHelps] = useState<Help[]>([]); const [users, setUsers] = useState<UserProfile[]>([]); const [subs, setSubs] = useState<Sub[]>([]); const [sf, setSf] = useState<Sub | null>(null);
   const [evForm, setEvForm] = useState(blankEv); const [hpForm, setHpForm] = useState(blankHelp); const [editId, setEditId] = useState<string | null>(null); const [open, setOpen] = useState(false);
   const [err, setErr] = useState(''); const [ok, setOk] = useState(''); const [busy, setBusy] = useState(false);
   const cname = (id: string | null) => churches.find((c) => c.id === id)?.name || '—';
@@ -19,6 +20,7 @@ export default function AdminExtras({ session, churches, view }: { session: Auth
     try {
       if (view === 'events') setEvs(await adminList<Ev>(session, 'church_events', 'starts_on.desc.nullslast'));
       if (view === 'help') setHelps(await adminList<Help>(session, 'help_requests'));
+      if (view === 'submissions') setSubs(await adminList<Sub>(session, 'church_submissions'));
       if (view === 'users') setUsers(await adminList<UserProfile>(session, 'profiles'));
     } catch (e) { setErr((e instanceof Error ? e.message : 'تعذر التحميل') + ' — تأكد إنك شغلت ملف SQL الثاني (202610230002).'); }
   }, [session, view]);
@@ -39,12 +41,35 @@ export default function AdminExtras({ session, churches, view }: { session: Auth
       setOk('تم الحفظ.'); setOpen(false); setEditId(null); await load();
     } catch (x) { setErr(x instanceof Error ? x.message : 'تعذر الحفظ'); } finally { setBusy(false); }
   }
+  async function publishSub(e: FormEvent) {
+    e.preventDefault(); if (!sf) return; setBusy(true); setErr(''); setOk('');
+    try {
+      if (sf.latitude === null || sf.longitude === null) throw new Error('الإحداثيات ناقصة (latitude / longitude).');
+      const list = (t: string | null) => (t || '').split(/[,،\n]/).map((x) => x.trim()).filter(Boolean);
+      await adminInsert(session, 'churches', { name: sf.name.trim(), address: sf.address?.trim() || sf.neighborhood || sf.governorate || '—', neighborhood: sf.neighborhood || null, governorate: sf.governorate || 'القاهرة', denomination: sf.denomination || null, latitude: Number(sf.latitude), longitude: Number(sf.longitude), phone: sf.phone || null, image_url: sf.image_url || null, description: sf.description || null, service_notes: sf.schedule_text || null, services: list(sf.services), facilities: [], is_published: true, verified: false });
+      await adminPatch(session, 'church_submissions', sf.id, { status: 'approved' });
+      setOk('تم النشر ✓ الكنيسة ظاهرة للناس دلوقتي.'); setSf(null); await load(); onPublished?.();
+    } catch (x) { setErr(x instanceof Error ? x.message : 'تعذر النشر'); } finally { setBusy(false); }
+  }
   async function remove(table: string, id: string) { if (!window.confirm('حذف نهائي؟')) return; try { await adminRemove(session, table, id); await load(); } catch (x) { setErr(x instanceof Error ? x.message : 'تعذر الحذف'); } }
   async function patch(table: string, id: string, body: Record<string, unknown>) { try { await adminPatch(session, table, id, body); await load(); } catch (x) { setErr(x instanceof Error ? x.message : 'تعذر التعديل'); } }
 
   return <>
     {err && <div className="inline-error" role="alert">{err}</div>}{ok && <div className="inline-success">{ok}</div>}
-    {view !== 'users' && <div className="admin-toolbar"><h2>{view === 'events' ? 'الاجتماعات والفعاليات' : 'طلبات المساعدة'}</h2><button className="btn primary" onClick={() => { setEditId(null); setEvForm(blankEv); setHpForm(blankHelp); setOpen(true); }}><Plus size={16} /> إضافة</button></div>}
+    {view === 'submissions' && <div className="admin-toolbar"><h2>طلبات إضافة كنائس ({subs.filter((x) => x.status === 'pending').length} جديد)</h2></div>}
+    {view === 'submissions' && !sf && <div className="content-card admin-table-wrap"><table className="admin-table"><thead><tr><th>الكنيسة</th><th>المرسل</th><th>الحالة</th><th /></tr></thead><tbody>{subs.map((r) => <tr key={r.id}><td><b>{r.name}</b><small>{[r.governorate, r.neighborhood].filter(Boolean).join(' - ')}</small></td><td>{r.submitter_name || '—'}<small dir="ltr">{r.submitter_phone || ''}</small></td><td><span className={`admin-status ${r.status === 'approved' ? 'good' : ''}`}>{r.status === 'pending' ? 'جديد' : r.status === 'approved' ? 'منشور' : 'مرفوض'}</span></td><td><div className="admin-row-actions">{r.status !== 'approved' && <button title="مراجعة ونشر" onClick={() => setSf(r)}><Edit3 size={16} /></button>}{r.status === 'pending' && <button title="رفض" onClick={() => void patch('church_submissions', r.id, { status: 'rejected' })}>✕</button>}<button title="حذف" onClick={() => void remove('church_submissions', r.id)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table>{subs.length === 0 && <div className="admin-empty">لا توجد طلبات.</div>}</div>}
+    {view === 'submissions' && sf && <div className="content-card admin-form-card"><form className="admin-form-grid" onSubmit={publishSub}>
+      {sf.image_url && <img className="wide" src={sf.image_url} alt="" style={{ maxHeight: 220, borderRadius: 14, objectFit: 'cover' }} />}
+      <label className="wide">الاسم<input value={sf.name} onChange={(e) => setSf({ ...sf, name: e.target.value })} /></label>
+      <label>المحافظة<input value={sf.governorate || ''} onChange={(e) => setSf({ ...sf, governorate: e.target.value })} /></label><label>المنطقة<input value={sf.neighborhood || ''} onChange={(e) => setSf({ ...sf, neighborhood: e.target.value })} /></label>
+      <label className="wide">العنوان<input value={sf.address || ''} onChange={(e) => setSf({ ...sf, address: e.target.value })} /></label>
+      <label>الطائفة<input value={sf.denomination || ''} onChange={(e) => setSf({ ...sf, denomination: e.target.value })} /></label><label>التليفون<input dir="ltr" value={sf.phone || ''} onChange={(e) => setSf({ ...sf, phone: e.target.value })} /></label>
+      <label>Latitude<input dir="ltr" type="number" step="any" value={sf.latitude ?? ''} onChange={(e) => setSf({ ...sf, latitude: e.target.value === '' ? null : Number(e.target.value) })} /></label><label>Longitude<input dir="ltr" type="number" step="any" value={sf.longitude ?? ''} onChange={(e) => setSf({ ...sf, longitude: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+      <label className="wide">الخدمات (بفاصلة)<input value={sf.services || ''} onChange={(e) => setSf({ ...sf, services: e.target.value })} /></label>
+      <label className="wide">المواعيد<textarea rows={2} value={sf.schedule_text || ''} onChange={(e) => setSf({ ...sf, schedule_text: e.target.value })} /></label>
+      <label className="wide">الوصف<textarea rows={2} value={sf.description || ''} onChange={(e) => setSf({ ...sf, description: e.target.value })} /></label>
+      <div className="admin-form-actions"><button className="btn primary" disabled={busy}><Check size={15} /> نشر</button><button type="button" className="btn outline" onClick={() => setSf(null)}>رجوع</button></div></form></div>}
+    {view !== 'users' && view !== 'submissions' && <div className="admin-toolbar"><h2>{view === 'events' ? 'الاجتماعات والفعاليات' : 'طلبات المساعدة'}</h2><button className="btn primary" onClick={() => { setEditId(null); setEvForm(blankEv); setHpForm(blankHelp); setOpen(true); }}><Plus size={16} /> إضافة</button></div>}
 
     {view === 'events' && <div className="content-card admin-table-wrap"><table className="admin-table"><thead><tr><th>العنوان</th><th>الكنيسة</th><th>الموعد</th><th>النشر</th><th /></tr></thead><tbody>{evs.map((r) => <tr key={r.id}><td><b>{r.title}</b><small>{r.kind}</small></td><td>{cname(r.church_id)}</td><td>{r.starts_on || '—'} {r.starts_at?.slice(0, 5) || ''}</td><td><span className={`admin-status ${r.is_published ? 'good' : ''}`}>{r.is_published ? 'منشور' : 'مخفي'}</span></td>
       <td><div className="admin-row-actions"><button title="تعديل" onClick={() => { setEditId(r.id); setEvForm({ church_id: r.church_id || '', title: r.title, kind: r.kind, description: r.description || '', starts_on: r.starts_on || '', starts_at: r.starts_at || '', location_note: r.location_note || '', is_published: r.is_published }); setOpen(true); }}><Edit3 size={16} /></button><button title="حذف" onClick={() => void remove('church_events', r.id)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table>{evs.length === 0 && <div className="admin-empty">لا توجد اجتماعات. اضغط إضافة.</div>}</div>}
